@@ -1,0 +1,57 @@
+{
+  "benchmark_mode": "complete",
+  "description": "Broader benchmark on larger datasets with longer training for a stronger comparison.",
+  "datasets": [
+    {
+      "dataset": "Kinships",
+      "training_triples": 8544,
+      "validation_triples": 1068,
+      "testing_triples": 1074,
+      "entities": 104,
+      "relations": 50
+    },
+    {
+      "dataset": "UMLS",
+      "training_triples": 5216,
+      "validation_triples": 652,
+      "testing_triples": 661,
+      "entities": 135,
+      "relations": 92
+    }
+  ],
+  "random_seed": 42,
+  "embedding_dim": 64,
+  "num_epochs": 100,
+  "batch_size": 128,
+  "learning_rate": 0.001,
+  "create_inverse_triples": true,
+  "models": [
+    {
+      "model": "TransE",
+      "model_kwargs": {
+        "embedding_dim": 64
+      }
+    },
+    {
+      "model": "PairRE",
+      "model_kwargs": {
+        "embedding_dim": 64
+      }
+    },
+    {
+      "model": "DistMult",
+      "model_kwargs": {
+        "embedding_dim": 64
+      }
+    },
+    {
+      "model": "ConvE",
+      "model_kwargs": {
+        "embedding_dim": 64,
+        "embedding_height": 8,
+        "output_channels": 16
+      }
+    }
+  ],
+  "evaluation_protocol": "Filtered ranking evaluation on the fixed test split for each dataset."
+}

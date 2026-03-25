@@ -1,145 +1,241 @@
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import warnings
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
-from pykeen.datasets import Nations
+from pykeen.datasets import Kinships, Nations, UMLS
 from pykeen.pipeline import pipeline
 
 RESULTS_DIR = Path("results")
-RESULTS_CSV_PATH = RESULTS_DIR / "benchmark_results.csv"
-LOSSES_JSON_PATH = RESULTS_DIR / "training_losses.json"
-METADATA_JSON_PATH = RESULTS_DIR / "benchmark_metadata.json"
-
-DATASET_NAME = "Nations"
 RANDOM_SEED = 42
-EMBEDDING_DIM = 64
-NUM_EPOCHS = 30
-BATCH_SIZE = 256
-LEARNING_RATE = 1e-3
 
-MODEL_CONFIGS = [
-    {"model": "TransE", "model_kwargs": {"embedding_dim": EMBEDDING_DIM}},
-    {"model": "PairRE", "model_kwargs": {"embedding_dim": EMBEDDING_DIM}},
-    {"model": "DistMult", "model_kwargs": {"embedding_dim": EMBEDDING_DIM}},
-]
+DATASET_REGISTRY = {
+    "Nations": Nations,
+    "Kinships": Kinships,
+    "UMLS": UMLS,
+}
+
+BENCHMARK_CONFIGS: dict[str, dict[str, Any]] = {
+    "minimal": {
+        "description": "Small, fast benchmark on Nations for a compact student submission.",
+        "datasets": ["Nations"],
+        "embedding_dim": 64,
+        "num_epochs": 30,
+        "batch_size": 128,
+        "learning_rate": 1e-3,
+        "create_inverse_triples": True,
+        "models": [
+            {"model": "TransE", "model_kwargs": {"embedding_dim": 64}},
+            {"model": "PairRE", "model_kwargs": {"embedding_dim": 64}},
+            {"model": "DistMult", "model_kwargs": {"embedding_dim": 64}},
+            {
+                "model": "ConvE",
+                "model_kwargs": {
+                    "embedding_dim": 64,
+                    "embedding_height": 8,
+                    "output_channels": 16,
+                },
+            },
+        ],
+    },
+    "complete": {
+        "description": "Broader benchmark on larger datasets with longer training for a stronger comparison.",
+        "datasets": ["Kinships", "UMLS"],
+        "embedding_dim": 64,
+        "num_epochs": 100,
+        "batch_size": 128,
+        "learning_rate": 1e-3,
+        "create_inverse_triples": True,
+        "models": [
+            {"model": "TransE", "model_kwargs": {"embedding_dim": 64}},
+            {"model": "PairRE", "model_kwargs": {"embedding_dim": 64}},
+            {"model": "DistMult", "model_kwargs": {"embedding_dim": 64}},
+            {
+                "model": "ConvE",
+                "model_kwargs": {
+                    "embedding_dim": 64,
+                    "embedding_height": 8,
+                    "output_channels": 16,
+                },
+            },
+        ],
+    },
+}
 
 
 def _configure_runtime() -> None:
     warnings.filterwarnings("ignore")
     logging.getLogger("pykeen").setLevel(logging.ERROR)
     logging.getLogger("torch_max_mem").setLevel(logging.ERROR)
+    logging.getLogger("pykeen.triples").setLevel(logging.ERROR)
+    logging.getLogger("pykeen.training").setLevel(logging.ERROR)
 
 
-def _dataset_summary(dataset: Nations) -> dict[str, int | str]:
-    return {
-        "dataset": DATASET_NAME,
-        "training_triples": dataset.training.num_triples,
-        "validation_triples": dataset.validation.num_triples,
-        "testing_triples": dataset.testing.num_triples,
-        "entities": dataset.training.num_entities,
-        "relations": dataset.training.num_relations,
-    }
+def get_benchmark_config(mode: str) -> dict[str, Any]:
+    try:
+        return BENCHMARK_CONFIGS[mode]
+    except KeyError as error:
+        allowed = ", ".join(sorted(BENCHMARK_CONFIGS))
+        raise ValueError(f"Unknown benchmark mode {mode!r}. Expected one of: {allowed}.") from error
 
 
-def _build_pipeline_kwargs(dataset: Nations) -> dict:
+def get_dataset_summaries(mode: str) -> list[dict[str, int | str]]:
+    config = get_benchmark_config(mode)
+    summaries: list[dict[str, int | str]] = []
+    for dataset_name in config["datasets"]:
+        dataset = DATASET_REGISTRY[dataset_name](
+            create_inverse_triples=config["create_inverse_triples"]
+        )
+        summaries.append(
+            {
+                "dataset": dataset_name,
+                "training_triples": dataset.training.num_triples,
+                "validation_triples": dataset.validation.num_triples,
+                "testing_triples": dataset.testing.num_triples,
+                "entities": dataset.training.num_entities,
+                "relations": dataset.training.num_relations,
+            }
+        )
+    return summaries
+
+
+def _build_pipeline_kwargs(dataset: Any, config: dict[str, Any]) -> dict[str, Any]:
     return {
         "dataset": dataset,
         "random_seed": RANDOM_SEED,
         "optimizer": "Adam",
-        "optimizer_kwargs": {"lr": LEARNING_RATE},
+        "optimizer_kwargs": {"lr": config["learning_rate"]},
         "negative_sampler": "basic",
         "negative_sampler_kwargs": {"num_negs_per_pos": 1},
         "training_kwargs": {
-            "num_epochs": NUM_EPOCHS,
-            "batch_size": BATCH_SIZE,
+            "num_epochs": config["num_epochs"],
+            "batch_size": config["batch_size"],
             "use_tqdm": False,
         },
         "evaluator_kwargs": {
             "filtered": True,
-            "batch_size": BATCH_SIZE,
+            "batch_size": config["batch_size"],
         },
         "evaluation_kwargs": {"use_tqdm": False},
         "device": "cpu",
     }
 
 
-def run_case_study() -> tuple[pd.DataFrame, dict[str, list[float]], dict[str, int | str]]:
+def run_case_study(mode: str = "minimal") -> tuple[pd.DataFrame, dict[str, dict[str, list[float]]], list[dict[str, int | str]], dict[str, Any]]:
     _configure_runtime()
-    dataset = Nations()
-    base_kwargs = _build_pipeline_kwargs(dataset)
+    config = get_benchmark_config(mode)
 
     rows: list[dict[str, float | int | str]] = []
-    losses: dict[str, list[float]] = {}
+    losses: dict[str, dict[str, list[float]]] = {}
 
-    for config in MODEL_CONFIGS:
-        model_name = config["model"]
-        result = pipeline(**base_kwargs, **config)
-        losses[model_name] = [float(loss) for loss in result.losses]
-        rows.append(
-            {
-                "model": model_name,
-                "train_seconds": float(result.train_seconds),
-                "parameter_count": int(result.model.num_parameters),
-                "mrr": float(
-                    result.metric_results.get_metric(
-                        "both.realistic.inverse_harmonic_mean_rank"
-                    )
-                ),
-                "hits@1": float(
-                    result.metric_results.get_metric("both.realistic.hits_at_1")
-                ),
-                "hits@3": float(
-                    result.metric_results.get_metric("both.realistic.hits_at_3")
-                ),
-                "hits@10": float(
-                    result.metric_results.get_metric("both.realistic.hits_at_10")
-                ),
-            }
+    for dataset_name in config["datasets"]:
+        dataset = DATASET_REGISTRY[dataset_name](
+            create_inverse_triples=config["create_inverse_triples"]
         )
+        base_kwargs = _build_pipeline_kwargs(dataset, config)
+        losses[dataset_name] = {}
+
+        for model_config in config["models"]:
+            model_name = model_config["model"]
+            result = pipeline(**base_kwargs, **model_config)
+            losses[dataset_name][model_name] = [float(loss) for loss in result.losses]
+            rows.append(
+                {
+                    "dataset": dataset_name,
+                    "model": model_name,
+                    "train_seconds": float(result.train_seconds),
+                    "parameter_count": int(result.model.num_parameters),
+                    "mrr": float(
+                        result.metric_results.get_metric(
+                            "both.realistic.inverse_harmonic_mean_rank"
+                        )
+                    ),
+                    "hits@1": float(
+                        result.metric_results.get_metric("both.realistic.hits_at_1")
+                    ),
+                    "hits@3": float(
+                        result.metric_results.get_metric("both.realistic.hits_at_3")
+                    ),
+                    "hits@10": float(
+                        result.metric_results.get_metric("both.realistic.hits_at_10")
+                    ),
+                }
+            )
 
     results = (
         pd.DataFrame(rows)
-        .sort_values(["mrr", "hits@10"], ascending=[False, False])
+        .sort_values(["dataset", "mrr", "hits@10"], ascending=[True, False, False])
         .reset_index(drop=True)
     )
-    return results, losses, _dataset_summary(dataset)
+    return results, losses, get_dataset_summaries(mode), config
 
 
 def save_case_study_artifacts(
     results: pd.DataFrame,
-    losses: dict[str, list[float]],
-    dataset_info: dict[str, int | str],
-    output_dir: Path = RESULTS_DIR,
-) -> None:
+    losses: dict[str, dict[str, list[float]]],
+    dataset_summaries: list[dict[str, int | str]],
+    config: dict[str, Any],
+    mode: str,
+    output_root: Path = RESULTS_DIR,
+) -> Path:
+    output_dir = output_root / mode
     output_dir.mkdir(parents=True, exist_ok=True)
-    results.to_csv(output_dir / RESULTS_CSV_PATH.name, index=False)
-    (output_dir / LOSSES_JSON_PATH.name).write_text(
+
+    (output_dir / "benchmark_results.csv").write_text(
+        results.to_csv(index=False),
+        encoding="utf-8",
+    )
+    (output_dir / "training_losses.json").write_text(
         json.dumps(losses, indent=2),
         encoding="utf-8",
     )
     metadata = {
-        "dataset": dataset_info,
+        "benchmark_mode": mode,
+        "description": config["description"],
+        "datasets": dataset_summaries,
         "random_seed": RANDOM_SEED,
-        "embedding_dim": EMBEDDING_DIM,
-        "num_epochs": NUM_EPOCHS,
-        "batch_size": BATCH_SIZE,
-        "learning_rate": LEARNING_RATE,
-        "models": MODEL_CONFIGS,
-        "evaluation_protocol": "Filtered ranking evaluation on the fixed Nations test split.",
+        "embedding_dim": config["embedding_dim"],
+        "num_epochs": config["num_epochs"],
+        "batch_size": config["batch_size"],
+        "learning_rate": config["learning_rate"],
+        "create_inverse_triples": config["create_inverse_triples"],
+        "models": config["models"],
+        "evaluation_protocol": "Filtered ranking evaluation on the fixed test split for each dataset.",
     }
-    (output_dir / METADATA_JSON_PATH.name).write_text(
+    (output_dir / "benchmark_metadata.json").write_text(
         json.dumps(metadata, indent=2),
         encoding="utf-8",
     )
+    return output_dir
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the PyKEEN KGE case study benchmark.")
+    parser.add_argument(
+        "--mode",
+        default="minimal",
+        choices=sorted(BENCHMARK_CONFIGS),
+        help="Benchmark preset to run.",
+    )
+    return parser.parse_args()
 
 
 def main() -> None:
-    results, losses, dataset_info = run_case_study()
-    save_case_study_artifacts(results, losses, dataset_info)
+    args = _parse_args()
+    results, losses, dataset_summaries, config = run_case_study(mode=args.mode)
+    output_dir = save_case_study_artifacts(
+        results=results,
+        losses=losses,
+        dataset_summaries=dataset_summaries,
+        config=config,
+        mode=args.mode,
+    )
+    print(f"Saved artifacts to {output_dir}")
     print(results.round(4).to_string(index=False))
 
 

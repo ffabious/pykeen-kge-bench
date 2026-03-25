@@ -1,17 +1,33 @@
 # PyKEEN KGE Case Study
 
-This project is a minimal reproducible benchmark for comparing three knowledge graph embedding models in PyKEEN:
+This repository contains a reproducible PyKEEN benchmark for comparing four knowledge graph embedding models:
 
 - `TransE`
 - `PairRE`
 - `DistMult`
+- `ConvE`
 
-The case study keeps the dataset split and evaluation protocol fixed, then compares:
+The case study keeps the split and evaluation protocol fixed inside each dataset, then compares:
 
 - `MRR`
 - `Hits@1`, `Hits@3`, `Hits@10`
 - training time
 - parameter count
+
+## Benchmark Modes
+
+There are two benchmark presets:
+
+- `minimal`: a small, fast benchmark on `Nations`
+- `complete`: a broader benchmark on `Kinships` and `UMLS` with much longer training
+
+The notebook exposes this as a single variable:
+
+```python
+BENCHMARK_MODE = "minimal"
+```
+
+Switch it to `"complete"` if you want the larger benchmark.
 
 ## Setup
 
@@ -21,31 +37,46 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Run The Benchmark
+## Run From Python
+
+Minimal benchmark:
 
 ```bash
 . .venv/bin/activate
-python benchmark_case_study.py
+python benchmark_case_study.py --mode minimal
 ```
 
-This saves the main artifacts in `results/`:
+Complete benchmark:
+
+```bash
+. .venv/bin/activate
+python benchmark_case_study.py --mode complete
+```
+
+Artifacts are saved separately:
+
+- `results/minimal/`
+- `results/complete/`
+
+Each folder contains:
 
 - `benchmark_results.csv`
 - `benchmark_metadata.json`
 - `training_losses.json`
 
-## Open The Notebook
+## Notebook
 
-The main deliverable is `case_study.ipynb`.
+The main deliverable is [case_study.ipynb](/Users/m3/Documents/uni/s26/nlp/pykeen-kge-bench/case_study.ipynb).
 
 It:
 
-- explains the controlled setup
+- explains the setup
+- lets you choose `minimal` or `complete`
 - runs the benchmark
-- shows tables and plots
-- gives a short model selection rationale based on the observed results
+- shows result tables and plots
+- gives a model selection rationale
 
-If you want to re-execute the notebook:
+To re-execute the notebook:
 
 ```bash
 . .venv/bin/activate
@@ -54,23 +85,37 @@ python -m jupyter nbconvert --to notebook --execute --inplace case_study.ipynb
 
 ## Experimental Choices
 
-- Dataset: `Nations` from PyKEEN
-- Random seed: `42`
-- Embedding dimension: `64`
+Minimal mode:
+
+- Dataset: `Nations`
 - Epochs: `30`
-- Optimizer: `Adam` with learning rate `1e-3`
-- Evaluation: filtered ranking metrics on the fixed test split
+- Embedding dimension: `64`
+- Batch size: `128`
 
-The setup is intentionally simple and student-sized: enough to compare models fairly without turning the case study into a hyperparameter tuning project.
+Complete mode:
 
-## Current Result Snapshot
+- Datasets: `Kinships`, `UMLS`
+- Epochs: `100`
+- Embedding dimension: `64`
+- Batch size: `128`
 
-From the executed notebook in this repository:
+Shared settings:
 
-| Model | Train Seconds | Parameters | MRR | Hits@1 | Hits@3 | Hits@10 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| PairRE | 1.90 | 7936 | 0.6447 | 0.4627 | 0.7711 | 0.9876 |
-| DistMult | 1.92 | 4416 | 0.4776 | 0.2836 | 0.5622 | 0.9552 |
-| TransE | 2.12 | 4416 | 0.3232 | 0.0000 | 0.5498 | 0.9826 |
+- Random seed: `42`
+- Optimizer: `Adam`
+- Learning rate: `1e-3`
+- Inverse triples: enabled
+- Evaluation: filtered ranking metrics on fixed test splits
 
-In this controlled setup, `PairRE` is the recommended final model because it gives the best ranking quality with almost the same training time as the other two models.
+## Current Minimal Snapshot
+
+The current checked-in notebook is intended to run in `minimal` mode by default. A recent run produced:
+
+| Dataset | Model | Train Seconds | Parameters | MRR | Hits@1 | Hits@3 | Hits@10 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Nations | PairRE | 2.57 | 14976 | 0.6989 | 0.5448 | 0.8308 | 0.9851 |
+| Nations | ConvE | 9.13 | 94352 | 0.6876 | 0.5423 | 0.7736 | 0.9851 |
+| Nations | DistMult | 2.57 | 7936 | 0.6712 | 0.5249 | 0.7687 | 0.9677 |
+| Nations | TransE | 2.53 | 7936 | 0.3402 | 0.0000 | 0.5622 | 0.9726 |
+
+In the minimal benchmark, `PairRE` is the best choice because it has the highest MRR while staying far smaller and faster than `ConvE`.

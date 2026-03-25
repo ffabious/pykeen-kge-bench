@@ -1,0 +1,49 @@
+{
+  "benchmark_mode": "minimal",
+  "description": "Small, fast benchmark on Nations for a compact student submission.",
+  "datasets": [
+    {
+      "dataset": "Nations",
+      "training_triples": 1592,
+      "validation_triples": 199,
+      "testing_triples": 201,
+      "entities": 14,
+      "relations": 110
+    }
+  ],
+  "random_seed": 42,
+  "embedding_dim": 64,
+  "num_epochs": 30,
+  "batch_size": 128,
+  "learning_rate": 0.001,
+  "create_inverse_triples": true,
+  "models": [
+    {
+      "model": "TransE",
+      "model_kwargs": {
+        "embedding_dim": 64
+      }
+    },
+    {
+      "model": "PairRE",
+      "model_kwargs": {
+        "embedding_dim": 64
+      }
+    },
+    {
+      "model": "DistMult",
+      "model_kwargs": {
+        "embedding_dim": 64
+      }
+    },
+    {
+      "model": "ConvE",
+      "model_kwargs": {
+        "embedding_dim": 64,
+        "embedding_height": 8,
+        "output_channels": 16
+      }
+    }
+  ],
+  "evaluation_protocol": "Filtered ranking evaluation on the fixed test split for each dataset."
+}
