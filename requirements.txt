@@ -1,0 +1,7 @@
+pykeen==1.11.1
+pandas==3.0.1
+matplotlib==3.10.8
+jupyter==1.1.1
+nbformat==5.10.4
+nbclient==0.10.4
+ipykernel==7.2.0

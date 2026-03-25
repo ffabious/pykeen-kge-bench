@@ -1,0 +1,36 @@
+{
+  "dataset": {
+    "dataset": "Nations",
+    "training_triples": 1592,
+    "validation_triples": 199,
+    "testing_triples": 201,
+    "entities": 14,
+    "relations": 55
+  },
+  "random_seed": 42,
+  "embedding_dim": 64,
+  "num_epochs": 30,
+  "batch_size": 256,
+  "learning_rate": 0.001,
+  "models": [
+    {
+      "model": "TransE",
+      "model_kwargs": {
+        "embedding_dim": 64
+      }
+    },
+    {
+      "model": "PairRE",
+      "model_kwargs": {
+        "embedding_dim": 64
+      }
+    },
+    {
+      "model": "DistMult",
+      "model_kwargs": {
+        "embedding_dim": 64
+      }
+    }
+  ],
+  "evaluation_protocol": "Filtered ranking evaluation on the fixed Nations test split."
+}
