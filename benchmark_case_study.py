@@ -3,18 +3,32 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import traceback
 import warnings
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import pandas as pd
-from pykeen.datasets import Kinships, Nations, UMLS
+from pykeen.datasets import (
+    CoDExSmall,
+    Countries,
+    DBpedia50,
+    FB15k237,
+    Kinships,
+    Nations,
+    UMLS,
+)
 from pykeen.pipeline import pipeline
 
 RESULTS_DIR = Path("results")
 RANDOM_SEED = 42
 
 DATASET_REGISTRY = {
+    "CoDExSmall": CoDExSmall,
+    "Countries": Countries,
+    "DBpedia50": DBpedia50,
+    "FB15k237": FB15k237,
     "Nations": Nations,
     "Kinships": Kinships,
     "UMLS": UMLS,
@@ -44,10 +58,18 @@ BENCHMARK_CONFIGS: dict[str, dict[str, Any]] = {
         ],
     },
     "complete": {
-        "description": "Broader benchmark on larger datasets with longer training for a stronger comparison.",
-        "datasets": ["Kinships", "UMLS"],
+        "description": "Broader 7-dataset benchmark spanning Countries, Nations, Kinships, UMLS, CoDExSmall, DBpedia50, and FB15k237 for a stronger comparison without the duplicate and heaviest datasets.",
+        "datasets": [
+            "Countries",
+            "Nations",
+            "Kinships",
+            "UMLS",
+            "CoDExSmall",
+            "DBpedia50",
+            "FB15k237",
+        ],
         "embedding_dim": 64,
-        "num_epochs": 100,
+        "num_epochs": 50,
         "batch_size": 128,
         "learning_rate": 1e-3,
         "create_inverse_triples": True,
@@ -129,6 +151,14 @@ def _build_pipeline_kwargs(dataset: Any, config: dict[str, Any]) -> dict[str, An
 def run_case_study(mode: str = "minimal") -> tuple[pd.DataFrame, dict[str, dict[str, list[float]]], list[dict[str, int | str]], dict[str, Any]]:
     _configure_runtime()
     config = get_benchmark_config(mode)
+    total_runs = len(config["datasets"]) * len(config["models"])
+    completed_runs = 0
+
+    print(
+        f"Starting {mode} benchmark: {len(config['datasets'])} datasets x "
+        f"{len(config['models'])} models, {config['num_epochs']} epochs each.",
+        flush=True,
+    )
 
     rows: list[dict[str, float | int | str]] = []
     losses: dict[str, dict[str, list[float]]] = {}
@@ -142,7 +172,25 @@ def run_case_study(mode: str = "minimal") -> tuple[pd.DataFrame, dict[str, dict[
 
         for model_config in config["models"]:
             model_name = model_config["model"]
-            result = pipeline(**base_kwargs, **model_config)
+            run_index = completed_runs + 1
+            print(
+                f"[{run_index}/{total_runs}] Running {model_name} on {dataset_name}...",
+                flush=True,
+            )
+            started_at = perf_counter()
+            try:
+                result = pipeline(**base_kwargs, **model_config)
+            except Exception as error:
+                elapsed = perf_counter() - started_at
+                print(
+                    f"[{run_index}/{total_runs}] ERROR while running {model_name} on "
+                    f"{dataset_name} after {elapsed:.1f}s: {error}",
+                    flush=True,
+                )
+                traceback.print_exc()
+                raise
+            completed_runs += 1
+            elapsed = perf_counter() - started_at
             losses[dataset_name][model_name] = [float(loss) for loss in result.losses]
             rows.append(
                 {
@@ -165,6 +213,11 @@ def run_case_study(mode: str = "minimal") -> tuple[pd.DataFrame, dict[str, dict[
                         result.metric_results.get_metric("both.realistic.hits_at_10")
                     ),
                 }
+            )
+            print(
+                f"[{completed_runs}/{total_runs}] Finished {model_name} on {dataset_name} "
+                f"in {elapsed:.1f}s, MRR={rows[-1]['mrr']:.4f}.",
+                flush=True,
             )
 
     results = (
@@ -227,16 +280,21 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    results, losses, dataset_summaries, config = run_case_study(mode=args.mode)
-    output_dir = save_case_study_artifacts(
-        results=results,
-        losses=losses,
-        dataset_summaries=dataset_summaries,
-        config=config,
-        mode=args.mode,
-    )
-    print(f"Saved artifacts to {output_dir}")
-    print(results.round(4).to_string(index=False))
+    try:
+        results, losses, dataset_summaries, config = run_case_study(mode=args.mode)
+        output_dir = save_case_study_artifacts(
+            results=results,
+            losses=losses,
+            dataset_summaries=dataset_summaries,
+            config=config,
+            mode=args.mode,
+        )
+        print(f"Saved artifacts to {output_dir}")
+        print(results.round(4).to_string(index=False))
+    except Exception as error:
+        print(f"Benchmark failed: {error}", flush=True)
+        traceback.print_exc()
+        raise
 
 
 if __name__ == "__main__":

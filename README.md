@@ -19,7 +19,7 @@ The case study keeps the split and evaluation protocol fixed inside each dataset
 There are two benchmark presets:
 
 - `minimal`: a small, fast benchmark on `Nations`
-- `complete`: a broader benchmark on `Kinships` and `UMLS` with much longer training
+- `complete`: a broader 7-dataset benchmark on `Countries`, `Nations`, `Kinships`, `UMLS`, `CoDExSmall`, `DBpedia50`, and `FB15k237`
 
 The notebook exposes this as a single variable:
 
@@ -32,7 +32,7 @@ Switch it to `"complete"` if you want the larger benchmark.
 ## Setup
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -94,8 +94,8 @@ Minimal mode:
 
 Complete mode:
 
-- Datasets: `Kinships`, `UMLS`
-- Epochs: `100`
+- Datasets: `Countries`, `Nations`, `Kinships`, `UMLS`, `CoDExSmall`, `DBpedia50`, `FB15k237`
+- Epochs: `50`
 - Embedding dimension: `64`
 - Batch size: `128`
 
@@ -119,3 +119,30 @@ The current checked-in notebook is intended to run in `minimal` mode by default.
 | Nations | TransE | 2.53 | 7936 | 0.3402 | 0.0000 | 0.5622 | 0.9726 |
 
 In the minimal benchmark, `PairRE` is the best choice because it has the highest MRR while staying far smaller and faster than `ConvE`.
+
+## Current Complete Snapshot
+
+The current checked-in complete benchmark covers `7` datasets and keeps `PairRE` as the best overall default model, even though `DistMult` wins more individual datasets by `MRR`.
+
+Per-dataset `MRR` winners:
+
+| Dataset | Best Model | Best MRR | Second Best |
+| --- | --- | ---: | ---: |
+| CoDExSmall | DistMult | **0.2335** | PairRE `0.2325` |
+| Countries | DistMult | **0.7622** | PairRE `0.7595` |
+| DBpedia50 | DistMult | **0.3376** | PairRE `0.2809` |
+| FB15k237 | DistMult | **0.1825** | PairRE `0.1780` |
+| Kinships | PairRE | **0.6094** | ConvE `0.5517` |
+| Nations | PairRE | **0.7245** | ConvE `0.7170` |
+| UMLS | PairRE | **0.7718** | ConvE `0.6985` |
+
+Average across the complete benchmark:
+
+| Model | Avg Train Seconds | Avg Parameters | Avg MRR | Avg Hits@1 | Avg Hits@3 | Avg Hits@10 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| PairRE | 155.69 | 408,859 | **0.5081** | **0.3964** | **0.5768** | **0.7139** |
+| DistMult | 164.86 | 394,999 | 0.4199 | 0.3024 | 0.4796 | 0.6514 |
+| ConvE | 509.80 | 487,356 | 0.3355 | 0.2416 | 0.3854 | 0.5188 |
+| TransE | 150.05 | 394,999 | 0.2568 | 0.0811 | 0.3600 | 0.5729 |
+
+That is why the broader benchmark still supports choosing `PairRE` as the main model: it leads every average ranking metric while training slightly faster than `DistMult` on average and far faster than `ConvE`.

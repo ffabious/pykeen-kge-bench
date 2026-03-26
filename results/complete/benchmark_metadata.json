@@ -1,7 +1,23 @@
 {
   "benchmark_mode": "complete",
-  "description": "Broader benchmark on larger datasets with longer training for a stronger comparison.",
+  "description": "Broader 7-dataset benchmark spanning Countries, Nations, Kinships, UMLS, CoDExSmall, DBpedia50, and FB15k237 for a stronger comparison without the duplicate and heaviest datasets.",
   "datasets": [
+    {
+      "dataset": "Countries",
+      "training_triples": 1110,
+      "validation_triples": 24,
+      "testing_triples": 24,
+      "entities": 271,
+      "relations": 4
+    },
+    {
+      "dataset": "Nations",
+      "training_triples": 1592,
+      "validation_triples": 199,
+      "testing_triples": 201,
+      "entities": 14,
+      "relations": 110
+    },
     {
       "dataset": "Kinships",
       "training_triples": 8544,
@@ -17,11 +33,35 @@
       "testing_triples": 661,
       "entities": 135,
       "relations": 92
+    },
+    {
+      "dataset": "CoDExSmall",
+      "training_triples": 32888,
+      "validation_triples": 1827,
+      "testing_triples": 1828,
+      "entities": 2034,
+      "relations": 84
+    },
+    {
+      "dataset": "DBpedia50",
+      "training_triples": 32203,
+      "validation_triples": 123,
+      "testing_triples": 2095,
+      "entities": 24624,
+      "relations": 702
+    },
+    {
+      "dataset": "FB15k237",
+      "training_triples": 272115,
+      "validation_triples": 17526,
+      "testing_triples": 20438,
+      "entities": 14505,
+      "relations": 474
     }
   ],
   "random_seed": 42,
   "embedding_dim": 64,
-  "num_epochs": 100,
+  "num_epochs": 50,
   "batch_size": 128,
   "learning_rate": 0.001,
   "create_inverse_triples": true,
