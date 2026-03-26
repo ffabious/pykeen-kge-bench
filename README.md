@@ -66,7 +66,7 @@ Each folder contains:
 
 ## Notebook
 
-The main deliverable is [case_study.ipynb](/Users/m3/Documents/uni/s26/nlp/pykeen-kge-bench/case_study.ipynb).
+The main deliverable is [case_study.ipynb](./case_study.ipynb).
 
 It:
 
