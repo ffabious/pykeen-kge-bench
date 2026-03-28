@@ -13,6 +13,7 @@ The case study keeps the split and evaluation protocol fixed inside each dataset
 - `Hits@1`, `Hits@3`, `Hits@10`
 - training time
 - parameter count
+- stability across random seeds
 
 ## Benchmark Modes
 
@@ -20,6 +21,18 @@ There are two benchmark presets:
 
 - `minimal`: a small, fast benchmark on `Nations`
 - `complete`: a broader 7-dataset benchmark on `Countries`, `Nations`, `Kinships`, `UMLS`, `CoDExSmall`, `DBpedia50`, and `FB15k237`
+
+The presets now differ in seed count as well:
+
+- `minimal` runs `3` seeds by default: `42`, `43`, `44`
+- `complete` runs `1` seed by default: `42`
+
+You can override the seeds from the CLI:
+
+```bash
+. .venv/bin/activate
+python benchmark_case_study.py --mode minimal --seeds 42 43 44
+```
 
 The notebook exposes this as a single variable:
 
@@ -60,9 +73,12 @@ Artifacts are saved separately:
 
 Each folder contains:
 
+- `benchmark_runs.csv`
 - `benchmark_results.csv`
 - `benchmark_metadata.json`
 - `training_losses.json`
+
+`benchmark_runs.csv` stores one row per dataset-model-seed run. `benchmark_results.csv` stores the aggregated summary used by the notebook, including mean metrics and standard deviations across seeds.
 
 ## Notebook
 
@@ -73,6 +89,7 @@ It:
 - explains the setup
 - lets you choose `minimal` or `complete`
 - runs the benchmark
+- shows the per-seed raw runs
 - shows result tables and plots
 - gives a model selection rationale
 
@@ -89,6 +106,7 @@ Minimal mode:
 
 - Dataset: `Nations`
 - Epochs: `30`
+- Seeds: `42`, `43`, `44`
 - Embedding dimension: `64`
 - Batch size: `128`
 
@@ -96,12 +114,13 @@ Complete mode:
 
 - Datasets: `Countries`, `Nations`, `Kinships`, `UMLS`, `CoDExSmall`, `DBpedia50`, `FB15k237`
 - Epochs: `50`
+- Seeds: `42`
 - Embedding dimension: `64`
 - Batch size: `128`
 
 Shared settings:
 
-- Random seed: `42`
+- Base seed constant: `42`
 - Optimizer: `Adam`
 - Learning rate: `1e-3`
 - Inverse triples: enabled
@@ -118,7 +137,7 @@ The current checked-in notebook is intended to run in `minimal` mode by default.
 | Nations | DistMult | 2.57 | 7936 | 0.6712 | 0.5249 | 0.7687 | 0.9677 |
 | Nations | TransE | 2.53 | 7936 | 0.3402 | 0.0000 | 0.5622 | 0.9726 |
 
-In the minimal benchmark, `PairRE` is the best choice because it has the highest MRR while staying far smaller and faster than `ConvE`.
+In the minimal benchmark, `PairRE` is the current best default because it has the highest average MRR while staying far smaller and faster than `ConvE`.
 
 ## Current Complete Snapshot
 
@@ -145,4 +164,4 @@ Average across the complete benchmark:
 | ConvE | 509.80 | 487,356 | 0.3355 | 0.2416 | 0.3854 | 0.5188 |
 | TransE | 150.05 | 394,999 | 0.2568 | 0.0811 | 0.3600 | 0.5729 |
 
-That is why the broader benchmark still supports choosing `PairRE` as the main model: it leads every average ranking metric while training slightly faster than `DistMult` on average and far faster than `ConvE`.
+That is why the broader benchmark still supports choosing `PairRE` as the main model: it leads every average ranking metric while training slightly faster than `DistMult` on average and far faster than `ConvE`. Multi-seed runs in the minimal preset now make that kind of recommendation more defensible than a single-run result.

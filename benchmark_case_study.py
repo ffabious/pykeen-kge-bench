@@ -23,6 +23,8 @@ from pykeen.pipeline import pipeline
 
 RESULTS_DIR = Path("results")
 RANDOM_SEED = 42
+DEFAULT_MINIMAL_SEEDS = [42, 43, 44]
+DEFAULT_COMPLETE_SEEDS = [42]
 
 DATASET_REGISTRY = {
     "CoDExSmall": CoDExSmall,
@@ -38,6 +40,7 @@ BENCHMARK_CONFIGS: dict[str, dict[str, Any]] = {
     "minimal": {
         "description": "Small, fast benchmark on Nations for a compact student submission.",
         "datasets": ["Nations"],
+        "seeds": DEFAULT_MINIMAL_SEEDS,
         "embedding_dim": 64,
         "num_epochs": 30,
         "batch_size": 128,
@@ -68,6 +71,7 @@ BENCHMARK_CONFIGS: dict[str, dict[str, Any]] = {
             "DBpedia50",
             "FB15k237",
         ],
+        "seeds": DEFAULT_COMPLETE_SEEDS,
         "embedding_dim": 64,
         "num_epochs": 50,
         "batch_size": 128,
@@ -129,7 +133,6 @@ def get_dataset_summaries(mode: str) -> list[dict[str, int | str]]:
 def _build_pipeline_kwargs(dataset: Any, config: dict[str, Any]) -> dict[str, Any]:
     return {
         "dataset": dataset,
-        "random_seed": RANDOM_SEED,
         "optimizer": "Adam",
         "optimizer_kwargs": {"lr": config["learning_rate"]},
         "negative_sampler": "basic",
@@ -148,20 +151,53 @@ def _build_pipeline_kwargs(dataset: Any, config: dict[str, Any]) -> dict[str, An
     }
 
 
-def run_case_study(mode: str = "minimal") -> tuple[pd.DataFrame, dict[str, dict[str, list[float]]], list[dict[str, int | str]], dict[str, Any]]:
+def _summarize_runs(run_results: pd.DataFrame) -> pd.DataFrame:
+    summary = (
+        run_results.groupby(["dataset", "model"], as_index=False)
+        .agg(
+            runs=("seed", "count"),
+            train_seconds=("train_seconds", "mean"),
+            train_seconds_std=("train_seconds", "std"),
+            parameter_count=("parameter_count", "mean"),
+            mrr=("mrr", "mean"),
+            mrr_std=("mrr", "std"),
+            **{
+                "hits@1": ("hits@1", "mean"),
+                "hits@1_std": ("hits@1", "std"),
+                "hits@3": ("hits@3", "mean"),
+                "hits@3_std": ("hits@3", "std"),
+                "hits@10": ("hits@10", "mean"),
+                "hits@10_std": ("hits@10", "std"),
+            },
+        )
+        .fillna(0.0)
+    )
+    summary["parameter_count"] = summary["parameter_count"].round().astype(int)
+    summary = (
+        summary.sort_values(["dataset", "mrr", "hits@10"], ascending=[True, False, False])
+        .reset_index(drop=True)
+    )
+    return summary
+
+
+def run_case_study(
+    mode: str = "minimal",
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, dict[str, dict[str, list[float]]]], list[dict[str, int | str]], dict[str, Any]]:
     _configure_runtime()
     config = get_benchmark_config(mode)
-    total_runs = len(config["datasets"]) * len(config["models"])
+    seeds = [int(seed) for seed in config["seeds"]]
+    total_runs = len(config["datasets"]) * len(config["models"]) * len(seeds)
     completed_runs = 0
 
     print(
         f"Starting {mode} benchmark: {len(config['datasets'])} datasets x "
-        f"{len(config['models'])} models, {config['num_epochs']} epochs each.",
+        f"{len(config['models'])} models x {len(seeds)} seed(s), "
+        f"{config['num_epochs']} epochs each.",
         flush=True,
     )
 
     rows: list[dict[str, float | int | str]] = []
-    losses: dict[str, dict[str, list[float]]] = {}
+    losses: dict[str, dict[str, dict[str, list[float]]]] = {}
 
     for dataset_name in config["datasets"]:
         dataset = DATASET_REGISTRY[dataset_name](
@@ -172,65 +208,75 @@ def run_case_study(mode: str = "minimal") -> tuple[pd.DataFrame, dict[str, dict[
 
         for model_config in config["models"]:
             model_name = model_config["model"]
-            run_index = completed_runs + 1
-            print(
-                f"[{run_index}/{total_runs}] Running {model_name} on {dataset_name}...",
-                flush=True,
-            )
-            started_at = perf_counter()
-            try:
-                result = pipeline(**base_kwargs, **model_config)
-            except Exception as error:
-                elapsed = perf_counter() - started_at
+            losses[dataset_name][model_name] = {}
+            for seed in seeds:
+                run_index = completed_runs + 1
                 print(
-                    f"[{run_index}/{total_runs}] ERROR while running {model_name} on "
-                    f"{dataset_name} after {elapsed:.1f}s: {error}",
+                    f"[{run_index}/{total_runs}] Running {model_name} on {dataset_name} "
+                    f"(seed={seed})...",
                     flush=True,
                 )
-                traceback.print_exc()
-                raise
-            completed_runs += 1
-            elapsed = perf_counter() - started_at
-            losses[dataset_name][model_name] = [float(loss) for loss in result.losses]
-            rows.append(
-                {
-                    "dataset": dataset_name,
-                    "model": model_name,
-                    "train_seconds": float(result.train_seconds),
-                    "parameter_count": int(result.model.num_parameters),
-                    "mrr": float(
-                        result.metric_results.get_metric(
-                            "both.realistic.inverse_harmonic_mean_rank"
-                        )
-                    ),
-                    "hits@1": float(
-                        result.metric_results.get_metric("both.realistic.hits_at_1")
-                    ),
-                    "hits@3": float(
-                        result.metric_results.get_metric("both.realistic.hits_at_3")
-                    ),
-                    "hits@10": float(
-                        result.metric_results.get_metric("both.realistic.hits_at_10")
-                    ),
-                }
-            )
-            print(
-                f"[{completed_runs}/{total_runs}] Finished {model_name} on {dataset_name} "
-                f"in {elapsed:.1f}s, MRR={rows[-1]['mrr']:.4f}.",
-                flush=True,
-            )
+                started_at = perf_counter()
+                try:
+                    result = pipeline(
+                        **base_kwargs,
+                        random_seed=seed,
+                        **model_config,
+                    )
+                except Exception as error:
+                    elapsed = perf_counter() - started_at
+                    print(
+                        f"[{run_index}/{total_runs}] ERROR while running {model_name} on "
+                        f"{dataset_name} (seed={seed}) after {elapsed:.1f}s: {error}",
+                        flush=True,
+                    )
+                    traceback.print_exc()
+                    raise
+                completed_runs += 1
+                elapsed = perf_counter() - started_at
+                losses[dataset_name][model_name][str(seed)] = [
+                    float(loss) for loss in result.losses
+                ]
+                rows.append(
+                    {
+                        "dataset": dataset_name,
+                        "model": model_name,
+                        "seed": seed,
+                        "train_seconds": float(result.train_seconds),
+                        "parameter_count": int(result.model.num_parameters),
+                        "mrr": float(
+                            result.metric_results.get_metric(
+                                "both.realistic.inverse_harmonic_mean_rank"
+                            )
+                        ),
+                        "hits@1": float(
+                            result.metric_results.get_metric("both.realistic.hits_at_1")
+                        ),
+                        "hits@3": float(
+                            result.metric_results.get_metric("both.realistic.hits_at_3")
+                        ),
+                        "hits@10": float(
+                            result.metric_results.get_metric("both.realistic.hits_at_10")
+                        ),
+                    }
+                )
+                print(
+                    f"[{completed_runs}/{total_runs}] Finished {model_name} on {dataset_name} "
+                    f"(seed={seed}) in {elapsed:.1f}s, MRR={rows[-1]['mrr']:.4f}.",
+                    flush=True,
+                )
 
-    results = (
-        pd.DataFrame(rows)
-        .sort_values(["dataset", "mrr", "hits@10"], ascending=[True, False, False])
-        .reset_index(drop=True)
+    run_results = pd.DataFrame(rows).sort_values(
+        ["dataset", "model", "seed"], ascending=[True, True, True]
     )
-    return results, losses, get_dataset_summaries(mode), config
+    results = _summarize_runs(run_results)
+    return results, run_results, losses, get_dataset_summaries(mode), config
 
 
 def save_case_study_artifacts(
     results: pd.DataFrame,
-    losses: dict[str, dict[str, list[float]]],
+    run_results: pd.DataFrame,
+    losses: dict[str, dict[str, dict[str, list[float]]]],
     dataset_summaries: list[dict[str, int | str]],
     config: dict[str, Any],
     mode: str,
@@ -239,6 +285,10 @@ def save_case_study_artifacts(
     output_dir = output_root / mode
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    (output_dir / "benchmark_runs.csv").write_text(
+        run_results.to_csv(index=False),
+        encoding="utf-8",
+    )
     (output_dir / "benchmark_results.csv").write_text(
         results.to_csv(index=False),
         encoding="utf-8",
@@ -252,6 +302,7 @@ def save_case_study_artifacts(
         "description": config["description"],
         "datasets": dataset_summaries,
         "random_seed": RANDOM_SEED,
+        "seeds": config["seeds"],
         "embedding_dim": config["embedding_dim"],
         "num_epochs": config["num_epochs"],
         "batch_size": config["batch_size"],
@@ -275,21 +326,36 @@ def _parse_args() -> argparse.Namespace:
         choices=sorted(BENCHMARK_CONFIGS),
         help="Benchmark preset to run.",
     )
+    parser.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        help="Optional explicit seeds. Overrides the preset defaults for the selected mode.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
     try:
-        results, losses, dataset_summaries, config = run_case_study(mode=args.mode)
+        config = get_benchmark_config(args.mode).copy()
+        if args.seeds:
+            config["seeds"] = args.seeds
+            BENCHMARK_CONFIGS[args.mode] = config
+
+        results, run_results, losses, dataset_summaries, config = run_case_study(mode=args.mode)
         output_dir = save_case_study_artifacts(
             results=results,
+            run_results=run_results,
             losses=losses,
             dataset_summaries=dataset_summaries,
             config=config,
             mode=args.mode,
         )
         print(f"Saved artifacts to {output_dir}")
+        print("\nPer-seed runs:")
+        print(run_results.round(4).to_string(index=False))
+        print("\nAggregated summary:")
         print(results.round(4).to_string(index=False))
     except Exception as error:
         print(f"Benchmark failed: {error}", flush=True)

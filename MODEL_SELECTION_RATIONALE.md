@@ -1,14 +1,14 @@
 # Model Selection Rationale
 
-This note summarizes the checked-in benchmark results and turns them into a defensible model choice.
+This note summarizes the checked-in benchmark results and turns them into a defensible model choice. The benchmark now records per-seed runs and should prefer average metrics across seeds over any single run.
 
 ## Recommendation
 
-Select **PairRE** as the default model for this benchmark suite.
+Select **PairRE** as the default model for this benchmark suite under the current fixed-budget benchmark design.
 
 It is the strongest overall choice because it:
 
-- achieves the best `MRR` in both benchmark modes
+- achieves the best average `MRR` in both benchmark modes
 - has the best average ranking metrics across the expanded `complete` benchmark
 - stays slightly faster than `DistMult` on average while delivering clearly better ranking quality
 - remains dramatically more efficient than `ConvE`
@@ -18,7 +18,7 @@ It is the strongest overall choice because it:
 
 ### Minimal benchmark (`Nations`)
 
-`PairRE` is the best model on the compact benchmark:
+`PairRE` is the best model on the compact benchmark by average ranking quality:
 
 | Model | Train Seconds | Parameters | MRR | Hits@1 | Hits@3 | Hits@10 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -34,11 +34,11 @@ Interpretation:
 - `DistMult` is compact and competitive, but still trails `PairRE` on every ranking metric.
 - `TransE` is clearly not competitive here because its `Hits@1` collapses to `0.0000`.
 
-For the minimal setting, the decision is straightforward: `PairRE` provides the best accuracy without paying the heavy compute and memory cost of `ConvE`.
+For the minimal setting, the current decision is straightforward: `PairRE` provides the best accuracy without paying the heavy compute and memory cost of `ConvE`. With the new multi-seed benchmark flow, that conclusion should be based on the mean and spread across seeds rather than on one run.
 
 ### Complete benchmark (`Countries`, `Nations`, `Kinships`, `UMLS`, `CoDExSmall`, `DBpedia50`, and `FB15k237`)
 
-`PairRE` is also the strongest model in the broader benchmark.
+`PairRE` is also the strongest model in the broader benchmark by macro-averaged ranking quality.
 
 #### Per-dataset winners by MRR
 
@@ -63,7 +63,7 @@ For the minimal setting, the decision is straightforward: `PairRE` provides the 
 
 Interpretation:
 
-- `DistMult` wins `4` of the `7` datasets by `MRR`, but all four wins are narrow and concentrated on the larger graphs.
+- `DistMult` wins `4` of the `7` datasets by `MRR`, but three of those wins are narrow and concentrated on the larger graphs.
 - `PairRE` wins the remaining `3` datasets and is the only model that leads every average ranking metric across the whole suite.
 - `PairRE` also trains slightly faster than `DistMult` on average, so its accuracy gain does not come with a speed penalty.
 - `ConvE` is much more expensive and still substantially behind `PairRE` and `DistMult` on the aggregate ranking metrics.
@@ -93,11 +93,11 @@ In other words, `PairRE` is not just easier to justify on accuracy; it is also t
 
 ## Final Decision
 
-Choose **PairRE** as the primary model for the case study.
+Choose **PairRE** as the primary model for the case study when the selection target is average ranking quality under fixed training budgets.
 
 Use the following rationale:
 
-- it is the top performer on the benchmark's most important metric, `MRR`
+- it is the top performer on the benchmark's most important metric, average `MRR`
 - it wins on all complete-mode ranking metrics on average
 - it beats `DistMult`, `ConvE`, and `TransE` on average `MRR`, `Hits@1`, `Hits@3`, and `Hits@10` across `7` datasets
 - it remains computationally lightweight relative to `ConvE`
