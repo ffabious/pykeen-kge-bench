@@ -1,6 +1,6 @@
 # Model Selection Rationale
 
-This note summarizes the checked-in benchmark results and turns them into a defensible model choice.
+This note summarizes the checked-in benchmark results and turns them into a reasonable model choice.
 
 ## Recommendation
 
@@ -10,7 +10,7 @@ It is the strongest overall choice because it:
 
 - achieves the best `MRR` in both benchmark modes
 - has the best average ranking metrics across the expanded `complete` benchmark
-- stays slightly faster than `DistMult` on average while delivering clearly better ranking quality
+- stays close to `DistMult` in training time while delivering clearly better ranking quality
 - remains dramatically more efficient than `ConvE`
 - is still the top `MRR` model on the most accurate smaller benchmarks in the complete suite: `Kinships`, `Nations`, and `UMLS`
 
@@ -22,15 +22,15 @@ It is the strongest overall choice because it:
 
 | Model | Train Seconds | Parameters | MRR | Hits@1 | Hits@3 | Hits@10 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| PairRE | 2.73 | 14,976 | **0.6989** | **0.5448** | **0.8308** | **0.9851** |
-| ConvE | 7.12 | 94,352 | 0.6876 | 0.5423 | 0.7736 | **0.9851** |
-| DistMult | 2.51 | 7,936 | 0.6712 | 0.5249 | 0.7687 | 0.9677 |
-| TransE | 2.52 | 7,936 | 0.3402 | 0.0000 | 0.5622 | 0.9726 |
+| PairRE | 3.95 | 14,976 | **0.6989** | **0.5448** | **0.8308** | **0.9851** |
+| ConvE | 10.64 | 94,352 | 0.6876 | 0.5423 | 0.7736 | **0.9851** |
+| DistMult | 3.74 | 7,936 | 0.6712 | 0.5249 | 0.7687 | 0.9677 |
+| TransE | 3.81 | 7,936 | 0.3402 | 0.0000 | 0.5622 | 0.9726 |
 
 Interpretation:
 
 - `PairRE` gives the highest `MRR`, `Hits@1`, and `Hits@3`.
-- `ConvE` matches `Hits@10`, but needs about `2.6x` longer training and about `6.3x` more parameters.
+- `ConvE` matches `Hits@10`, but needs about `2.7x` longer training and about `6.3x` more parameters.
 - `DistMult` is compact and competitive, but still trails `PairRE` on every ranking metric.
 - `TransE` is clearly not competitive here because its `Hits@1` collapses to `0.0000`.
 
@@ -56,16 +56,16 @@ For the minimal setting, the decision is straightforward: `PairRE` provides the 
 
 | Model | Avg Train Seconds | Avg Parameters | Avg MRR | Avg Hits@1 | Avg Hits@3 | Avg Hits@10 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| PairRE | 155.69 | 408,859 | **0.5081** | **0.3964** | **0.5768** | **0.7139** |
-| DistMult | 164.86 | 394,999 | 0.4199 | 0.3024 | 0.4796 | 0.6514 |
-| ConvE | 509.80 | 487,356 | 0.3355 | 0.2416 | 0.3854 | 0.5188 |
-| TransE | 150.05 | 394,999 | 0.2568 | 0.0811 | 0.3600 | 0.5729 |
+| PairRE | 102.47 | 408,859 | **0.5081** | **0.3964** | **0.5768** | **0.7139** |
+| DistMult | 93.45 | 394,999 | 0.4199 | 0.3024 | 0.4796 | 0.6514 |
+| ConvE | 360.57 | 487,356 | 0.3355 | 0.2416 | 0.3854 | 0.5188 |
+| TransE | 79.93 | 394,999 | 0.2568 | 0.0811 | 0.3600 | 0.5729 |
 
 Interpretation:
 
 - `DistMult` wins `4` of the `7` datasets by `MRR`, but all four wins are narrow and concentrated on the larger graphs.
 - `PairRE` wins the remaining `3` datasets and is the only model that leads every average ranking metric across the whole suite.
-- `PairRE` also trains slightly faster than `DistMult` on average, so its accuracy gain does not come with a speed penalty.
+- `PairRE` trains slightly slower than `DistMult` on average, but the measured quality gain is large enough to justify the small extra cost.
 - `ConvE` is much more expensive and still substantially behind `PairRE` and `DistMult` on the aggregate ranking metrics.
 - `TransE` remains the weakest overall option because it is consistently poor on `Hits@1` and rarely competitive on `MRR`.
 
@@ -76,7 +76,7 @@ The complete benchmark matters more for model selection because it tests general
 The main alternative is `ConvE`, because it is the only other model that comes close on some rankings in the minimal setting. However, the benchmark does not justify choosing it as the default:
 
 - In `minimal`, `ConvE` is slightly worse than `PairRE` on `MRR`, `Hits@1`, and `Hits@3`, while being much larger and slower.
-- In `complete`, `ConvE` trains about `3.3x` slower on average than `PairRE` and uses about `1.2x` more parameters on average.
+- In `complete`, `ConvE` trains about `3.5x` slower on average than `PairRE` and uses about `1.2x` more parameters on average.
 - That extra cost does not buy a single `MRR` win in the checked-in complete benchmark and still leaves `ConvE` well behind on average `MRR`, `Hits@1`, `Hits@3`, and `Hits@10`.
 
 So even if maximum model capacity is available, the measured return on that capacity is poor in this benchmark.

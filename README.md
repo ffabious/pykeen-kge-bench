@@ -24,10 +24,10 @@ There are two benchmark presets:
 The notebook exposes this as a single variable:
 
 ```python
-BENCHMARK_MODE = "minimal"
+BENCHMARK_MODE = "complete"
 ```
 
-Switch it to `"complete"` if you want the larger benchmark.
+Switch it to `"minimal"` if you want the faster one-dataset benchmark.
 
 ## Setup
 
@@ -109,14 +109,14 @@ Shared settings:
 
 ## Current Minimal Snapshot
 
-The current checked-in notebook is intended to run in `minimal` mode by default. A recent run produced:
+A recent minimal-mode sanity run produced:
 
 | Dataset | Model | Train Seconds | Parameters | MRR | Hits@1 | Hits@3 | Hits@10 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Nations | PairRE | 2.57 | 14976 | 0.6989 | 0.5448 | 0.8308 | 0.9851 |
-| Nations | ConvE | 9.13 | 94352 | 0.6876 | 0.5423 | 0.7736 | 0.9851 |
-| Nations | DistMult | 2.57 | 7936 | 0.6712 | 0.5249 | 0.7687 | 0.9677 |
-| Nations | TransE | 2.53 | 7936 | 0.3402 | 0.0000 | 0.5622 | 0.9726 |
+| Nations | PairRE | 3.95 | 14976 | 0.6989 | 0.5448 | 0.8308 | 0.9851 |
+| Nations | ConvE | 10.64 | 94352 | 0.6876 | 0.5423 | 0.7736 | 0.9851 |
+| Nations | DistMult | 3.74 | 7936 | 0.6712 | 0.5249 | 0.7687 | 0.9677 |
+| Nations | TransE | 3.81 | 7936 | 0.3402 | 0.0000 | 0.5622 | 0.9726 |
 
 In the minimal benchmark, `PairRE` is the best choice because it has the highest MRR while staying far smaller and faster than `ConvE`.
 
@@ -140,9 +140,9 @@ Average across the complete benchmark:
 
 | Model | Avg Train Seconds | Avg Parameters | Avg MRR | Avg Hits@1 | Avg Hits@3 | Avg Hits@10 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| PairRE | 155.69 | 408,859 | **0.5081** | **0.3964** | **0.5768** | **0.7139** |
-| DistMult | 164.86 | 394,999 | 0.4199 | 0.3024 | 0.4796 | 0.6514 |
-| ConvE | 509.80 | 487,356 | 0.3355 | 0.2416 | 0.3854 | 0.5188 |
-| TransE | 150.05 | 394,999 | 0.2568 | 0.0811 | 0.3600 | 0.5729 |
+| PairRE | 102.47 | 408,859 | **0.5081** | **0.3964** | **0.5768** | **0.7139** |
+| DistMult | 93.45 | 394,999 | 0.4199 | 0.3024 | 0.4796 | 0.6514 |
+| ConvE | 360.57 | 487,356 | 0.3355 | 0.2416 | 0.3854 | 0.5188 |
+| TransE | 79.93 | 394,999 | 0.2568 | 0.0811 | 0.3600 | 0.5729 |
 
-That is why the broader benchmark still supports choosing `PairRE` as the main model: it leads every average ranking metric while training slightly faster than `DistMult` on average and far faster than `ConvE`.
+That is why the broader benchmark still supports choosing `PairRE` as the main model: it leads every average ranking metric while staying close to `DistMult` in training time and far faster than `ConvE`.
